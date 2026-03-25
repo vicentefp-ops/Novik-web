@@ -78,13 +78,6 @@ export default function Home() {
           </div>
         </div>
         <p className="absolute bottom-4 right-4 text-slate-200 text-base italic z-10 px-4">Supporting clinical decisions, never replacing professional judgment.</p>
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="absolute bottom-40 right-40 z-10"
-        >
-          <img src="/logo.png" alt="Novik Logo" className="h-48 w-auto" />
-        </motion.div>
       </section>
 
       {/* Problem Section */}
