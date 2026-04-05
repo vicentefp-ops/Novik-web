@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 import CookieConsent from './components/CookieConsent';
+import WhatsAppFAB from './components/WhatsAppFAB';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Contact from './pages/Contact';
@@ -23,6 +24,7 @@ export default function App() {
       <CookieConsent />
       <div className="min-h-screen flex flex-col">
         <Navbar />
+        <WhatsAppFAB />
         <main className="flex-grow pt-16">
           <AnimatePresence mode="wait">
             <Routes>

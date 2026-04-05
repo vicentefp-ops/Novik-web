@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { Mail, MessageSquare, Users, Code, HelpCircle } from 'lucide-react';
+import { Mail, MessageSquare, Users, Code, HelpCircle, MessageCircle } from 'lucide-react';
 
 export default function Contact() {
   const containerVariants = {
@@ -39,6 +39,14 @@ export default function Contact() {
               <span className="font-bold tracking-wider uppercase text-xs text-slate-400">EMAIL</span>
             </div>
             <a href="mailto:info@novik.ai" className="text-2xl font-bold hover:text-primary transition-colors">info@novik.ai</a>
+          </motion.div>
+
+          <motion.div variants={itemVariants} className="bg-slate-900 p-8 rounded-3xl text-white hover:shadow-xl hover:shadow-primary/10 transition-shadow duration-300">
+            <div className="flex items-center gap-4 mb-4">
+              <MessageCircle className="text-primary w-6 h-6" />
+              <span className="font-bold tracking-wider uppercase text-xs text-slate-400">WHATSAPP</span>
+            </div>
+            <a href="https://wa.me/34690957910" target="_blank" rel="noopener noreferrer" className="text-2xl font-bold hover:text-primary transition-colors">+34 690 95 79 10</a>
           </motion.div>
 
           <motion.p variants={itemVariants} className="text-slate-500">

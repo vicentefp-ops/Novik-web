@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Linkedin } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, MessageCircle } from 'lucide-react';
 // import logo from '../assets/logo.png';
 const logo = '/logo.png';
 
@@ -46,6 +46,9 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-semibold mb-6">Follow Us</h4>
             <div className="flex gap-4">
+              <a href="https://wa.me/34690957910" target="_blank" rel="noopener noreferrer" className="bg-slate-800 p-2.5 rounded-full hover:bg-green-500 hover:text-white transition-all">
+                <MessageCircle size={20} />
+              </a>
               <a href="https://facebook.com/dentalnovik" target="_blank" rel="noopener noreferrer" className="bg-slate-800 p-2.5 rounded-full hover:bg-primary hover:text-white transition-all">
                 <Facebook size={20} />
               </a>
