@@ -31,8 +31,8 @@ export default function Contact() {
         {/* Left Column */}
         <div className="space-y-8">
           <motion.div variants={itemVariants}>
-            <h2 className="text-primary font-bold tracking-wider uppercase text-sm mb-2">GET IN TOUCH</h2>
             <h1 className="text-5xl font-bold text-slate-900 mb-6">Contact us</h1>
+            <h2 className="text-primary font-bold tracking-wider uppercase text-sm mb-4">GET IN TOUCH</h2>
             <p className="text-xl text-slate-600 leading-relaxed">
               At Novik, we value meaningful connections. Whether you want to share feedback, explore collaboration or ask a question, our team is here to listen and respond with care.
             </p>
@@ -40,7 +40,7 @@ export default function Contact() {
 
           <motion.div variants={itemVariants} className="bg-slate-900 p-8 rounded-3xl text-white hover:shadow-xl hover:shadow-primary/10 transition-shadow duration-300">
             <div className="flex items-center gap-4 mb-4">
-              <Mail className="text-primary w-6 h-6" />
+              <Mail className="text-[#A3C564] w-6 h-6" />
               <span className="font-bold tracking-wider uppercase text-xs text-slate-400">EMAIL</span>
             </div>
             <a href="mailto:info@novik.ai" className="text-2xl font-bold hover:text-primary transition-colors">info@novik.ai</a>
@@ -48,7 +48,7 @@ export default function Contact() {
 
           <motion.div variants={itemVariants} className="bg-slate-900 p-8 rounded-3xl text-white hover:shadow-xl hover:shadow-primary/10 transition-shadow duration-300">
             <div className="flex items-center gap-4 mb-4">
-              <MessageCircle className="text-primary w-6 h-6" />
+              <MessageCircle className="text-[#A3C564] w-6 h-6" />
               <span className="font-bold tracking-wider uppercase text-xs text-slate-400">WHATSAPP</span>
             </div>
             <a href="https://wa.me/34690957910" target="_blank" rel="noopener noreferrer" className="text-2xl font-bold hover:text-primary transition-colors">+34 690 95 79 10</a>

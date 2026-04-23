@@ -62,7 +62,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
+        <div className="pt-8 border-t border-slate-800 text-center text-xs text-slate-400">
           <p>© {new Date().getFullYear()} Novik AI. All rights reserved. Smarter Dental Decisions.</p>
         </div>
       </div>

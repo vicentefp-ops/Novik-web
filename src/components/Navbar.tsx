@@ -39,7 +39,7 @@ export default function Navbar() {
                 key={link.name}
                 to={link.path}
                 className={`text-sm font-medium transition-colors hover:text-primary ${
-                  location.pathname === link.path ? 'text-primary' : 'text-slate-600'
+                  location.pathname === link.path ? 'text-primary' : 'text-slate-700'
                 }`}
               >
                 {link.name}

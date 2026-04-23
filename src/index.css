@@ -1,15 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
-  --color-primary: #88A94E;
-  --color-primary-dark: #69853C;
+  --color-primary: #5a7032;
+  --color-primary-dark: #4a5d29;
 }
 
 @layer base {
   body {
     @apply font-sans text-slate-900 bg-white;
+  }
+  
+  section {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 500px;
+  }
+  
+  section:first-of-type {
+    content-visibility: visible;
   }
 }
 

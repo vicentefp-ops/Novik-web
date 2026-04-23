@@ -28,8 +28,8 @@ export default function Partners() {
         <meta name="description" content="Join Novik as a partner. Reach a global community of dental professionals and align your brand with innovation in clinical oral healthcare." />
       </Helmet>
       <motion.div variants={itemVariants} className="text-left mb-16">
-        <h2 className="text-primary font-bold tracking-wider uppercase text-sm mb-2">PARTNERSHIP</h2>
         <h1 className="text-5xl font-bold mb-6 text-slate-900">Partner with Novik</h1>
+        <h2 className="text-primary font-bold tracking-wider uppercase text-sm mb-4">PARTNERSHIP</h2>
         <p className="text-xl text-slate-600 max-w-2xl">
           As the first AI decision-support platform tailored specifically to dentistry, Novik reaches a global community of forward-thinking clinicians. By partnering with us, you align your brand with innovation, precision and safety in oral healthcare.
         </p>
@@ -48,7 +48,7 @@ export default function Partners() {
           { icon: <BarChart3 />, title: "Measurable exposure", desc: "Transparent reporting on impressions, click-throughs and audience demographics. Your investment is always traceable to real outcomes." }
         ].map((item, i) => (
           <motion.div variants={itemVariants} key={i} className="bg-slate-900 text-white p-8 rounded-3xl border border-slate-800 hover:-translate-y-2 transition-transform duration-300">
-            <div className="text-primary mb-6">
+            <div className="text-[#A3C564] mb-6">
               {item.icon}
             </div>
             <h3 className="text-xl font-bold mb-4">{item.title}</h3>
@@ -64,8 +64,8 @@ export default function Partners() {
         viewport={{ once: true, margin: "-50px" }}
         className="mb-16"
       >
-        <motion.h2 variants={itemVariants} className="text-primary font-bold tracking-wider uppercase text-sm mb-2">OPPORTUNITIES</motion.h2>
-        <motion.h3 variants={itemVariants} className="text-4xl font-bold text-slate-900 mb-10">Partnership categories</motion.h3>
+        <motion.h2 variants={itemVariants} className="text-4xl font-bold text-slate-900 mb-4">Partnership categories</motion.h2>
+        <motion.p variants={itemVariants} className="text-primary font-bold tracking-wider uppercase text-sm mb-10">OPPORTUNITIES</motion.p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
             { title: "Dental technology", desc: "Equipment manufacturers, CAD/CAM and imaging companies seeking clinician engagement." },
@@ -73,7 +73,7 @@ export default function Partners() {
             { title: "Health-tech & SaaS", desc: "Digital health platforms, EHR providers and practice management software seeking integration partners." }
           ].map((cat, i) => (
             <motion.div variants={itemVariants} key={i} className="bg-slate-100 p-8 rounded-3xl border border-slate-200 hover:shadow-lg transition-shadow duration-300">
-              <h4 className="text-xl font-bold mb-4 text-slate-900">{cat.title}</h4>
+              <h3 className="text-xl font-bold mb-4 text-slate-900">{cat.title}</h3>
               <p className="text-slate-600 leading-relaxed">{cat.desc}</p>
             </motion.div>
           ))}

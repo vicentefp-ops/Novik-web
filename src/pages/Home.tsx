@@ -59,7 +59,7 @@ export default function Home() {
           <div className="max-w-3xl">
             <motion.div 
               variants={itemVariants} 
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 border border-primary/30 text-white text-xs font-bold uppercase tracking-widest mb-8 backdrop-blur-md"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary border border-primary/30 text-slate-900 text-xs font-bold uppercase tracking-widest mb-8 backdrop-blur-md"
             >
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
@@ -73,7 +73,7 @@ export default function Home() {
               className="text-5xl md:text-8xl font-bold text-white mb-8 leading-[1.05] tracking-tight"
             >
               Novik AI: Clinical Excellence in Dentistry <br />
-              <span className="text-primary">Powered by Artificial Intelligence</span>
+              <span className="text-[#A3C564]">Powered by Artificial Intelligence</span>
             </motion.h1>
             
             <motion.p 
@@ -319,6 +319,9 @@ export default function Home() {
                   alt="Novik Dental AI Analysis Interface - Clinical Decision Support" 
                   className="rounded-[2.5rem] w-full shadow-inner"
                   loading="lazy"
+                  width="1000"
+                  height="800"
+                  decoding="async"
                 />
               </div>
               {/* Decorative elements */}
