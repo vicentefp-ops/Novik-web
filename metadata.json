@@ -1,0 +1,5 @@
+{
+  "name": "PerioVoxAI",
+  "description": "Voice-controlled periodontogram app for dental professionals with AI analysis.",
+  "requestFramePermissions": ["microphone"]
+}

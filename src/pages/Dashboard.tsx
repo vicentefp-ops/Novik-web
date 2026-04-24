@@ -1,229 +1,370 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Send, Paperclip, User, Bot, Loader2, Download, PlusCircle, Trash2 } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useStore } from '../store/useStore';
+import { db } from '../lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { Users, Activity, ShieldCheck, UserPlus, Stethoscope, ArrowRight, Target, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Periodontogram, Patient } from '../types';
+import { calculateHealthScore } from '../utils/calculations';
+import { InfoTooltip } from '../components/InfoTooltip';
 
-const SYSTEM_INSTRUCTION = `You are Novik, an AI-powered clinical decision support tool designed specifically for dentistry.
-Your goal is to help dental professionals make smarter and safer decisions.
-Always provide suggestions based on scientific evidence.
-Structure your response clearly:
-1. Risk Assessment (Low/Moderate/High)
-2. Clinical Considerations
-3. Recommended Protocols (Antibiotics, Anesthetics, etc.)
-4. Evidence and References (Vancouver style with PubMed links if possible)
-Legal Disclaimer: You are a support tool, not a replacement for the professional's clinical judgment.`;
-
-export default function Dashboard() {
-  const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+export function Dashboard() {
+  const { t } = useTranslation();
+  const { user, patients, setPatients, settings } = useStore();
+  const [loading, setLoading] = useState(true);
+  const [periodontograms, setPeriodontograms] = useState<Periodontogram[]>([]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const fetchData = async () => {
+      if (!user || !db) return;
+      setLoading(true);
+      try {
+        const qPatients = query(collection(db, 'patients'), where('userId', '==', user.uid));
+        const patientsSnapshot = await getDocs(qPatients);
+        const patientsData = patientsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Patient[];
+        setPatients(patientsData);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+        const qPerios = query(collection(db, 'periodontograms'), where('userId', '==', user.uid));
+        const periosSnapshot = await getDocs(qPerios);
+        const periosData = periosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Periodontogram[];
+        setPeriodontograms(periosData);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    const userMessage = input.trim();
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    setIsLoading(true);
+    fetchData();
+  }, [user, setPatients]);
 
+  const dashboardData = useMemo(() => {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [...messages.map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] })), { role: 'user', parts: [{ text: userMessage }] }],
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+      if (!patients.length || !periodontograms.length) return null;
+
+      const patientHistories = patients.map(patient => {
+        const patientPerios = periodontograms
+          .filter(p => p.patientId === patient.id)
+          .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime()); // Oldest first
+
+        if (patientPerios.length === 0) return null;
+
+        const scores = patientPerios.map(p => calculateHealthScore(p));
+        const firstScore = scores[0];
+        const latestScore = scores[scores.length - 1];
+        const maxScore = Math.max(...scores);
+        
+        const hasMultiple = scores.length > 1;
+        const improvement = hasMultiple ? latestScore - firstScore : 0;
+        
+        let cohort = 'baseline';
+        if (hasMultiple) {
+          cohort = latestScore >= 80 ? 'maintenance' : 'treatment';
         }
-      });
 
-      const aiContent = response.text || "I'm sorry, I couldn't process that request.";
-      setMessages(prev => [...prev, { role: 'ai', content: aiContent }]);
-    } catch (error) {
-      console.error("Gemini Error:", error);
-      setMessages(prev => [...prev, { role: 'ai', content: "Error: Failed to connect to AI engine. Please try again." }]);
-    } finally {
-      setIsLoading(false);
+        const relapsed = hasMultiple && (maxScore >= 70) && (maxScore - latestScore >= 5);
+
+        return {
+          patient,
+          scores,
+          firstScore,
+          latestScore,
+          improvement,
+          cohort,
+          relapsed,
+          hasMultiple,
+          lastDate: patientPerios[patientPerios.length - 1].date
+        };
+      }).filter(Boolean) as any[];
+
+      if (patientHistories.length === 0) return null;
+
+      const baselinePatients = patientHistories.filter(p => p.cohort === 'baseline');
+      const avgBaselineScore = baselinePatients.length ? Math.round(baselinePatients.reduce((acc, p) => acc + p.firstScore, 0) / baselinePatients.length) : 0;
+
+      const treatmentPatients = patientHistories.filter(p => p.cohort === 'treatment');
+      const avgTreatmentImprovement = treatmentPatients.length ? Math.round(treatmentPatients.reduce((acc, p) => acc + p.improvement, 0) / treatmentPatients.length) : 0;
+
+      const maintenancePatients = patientHistories.filter(p => p.cohort === 'maintenance');
+      const avgMaintenanceScore = maintenancePatients.length ? Math.round(maintenancePatients.reduce((acc, p) => acc + p.latestScore, 0) / maintenancePatients.length) : 0;
+
+      const trackedPatients = patientHistories.filter(p => p.hasMultiple);
+      const avgGlobalImprovement = trackedPatients.length ? Math.round(trackedPatients.reduce((acc, p) => acc + p.improvement, 0) / trackedPatients.length) : 0;
+      
+      const improvedCount = trackedPatients.filter(p => p.improvement >= 5).length;
+      const stableCount = trackedPatients.filter(p => p.improvement > -5 && p.improvement < 5).length;
+      const worsenedCount = trackedPatients.filter(p => p.improvement <= -5).length;
+
+      const improvedPercent = trackedPatients.length ? Math.round((improvedCount / trackedPatients.length) * 100) : 0;
+      const stablePercent = trackedPatients.length ? Math.round((stableCount / trackedPatients.length) * 100) : 0;
+      const worsenedPercent = trackedPatients.length ? Math.round((worsenedCount / trackedPatients.length) * 100) : 0;
+
+      const relapseCount = trackedPatients.filter(p => p.relapsed).length;
+      const relapsePercent = trackedPatients.length ? Math.round((relapseCount / trackedPatients.length) * 100) : 0;
+
+      const stabilizedPercent = trackedPatients.length ? Math.round((maintenancePatients.length / trackedPatients.length) * 100) : 0;
+
+      return {
+        cohorts: {
+          baseline: { count: baselinePatients.length, avgScore: avgBaselineScore },
+          treatment: { count: treatmentPatients.length, avgImprovement: avgTreatmentImprovement },
+          maintenance: { count: maintenancePatients.length, avgScore: avgMaintenanceScore }
+        },
+        impact: {
+          avgImprovement: avgGlobalImprovement,
+          improvedPercent,
+          stablePercent,
+          worsenedPercent,
+          relapsePercent,
+          stabilizedPercent,
+          trackedCount: trackedPatients.length
+        },
+        recentPatients: patientHistories.sort((a, b) => new Date(b.lastDate || 0).getTime() - new Date(a.lastDate || 0).getTime()).slice(0, 5)
+      };
+    } catch (err) {
+      console.error("Error calculating dashboard data:", err);
+      return null;
     }
-  };
-
-  const handleNewPatient = () => {
-    if (confirm("Are you sure you want to clear the current case?")) {
-      setMessages([]);
-    }
-  };
-
-  const handleExport = () => {
-    const content = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `novik-case-${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
-  };
+  }, [patients, periodontograms]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 h-[calc(100vh-80px)] flex flex-col gap-6">
-      {/* Dashboard Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">
+          {t('welcome_back', { name: settings?.doctorName || user?.displayName?.split(' ')[0] || t('user') })}
+        </h1>
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Clinical Case Analysis</h1>
-          <p className="text-slate-500 flex items-center gap-2 mt-1">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            AI Engine Active
-          </p>
-        </div>
-        <div className="flex gap-3 w-full md:w-auto">
-          <button 
-            onClick={handleExport} 
-            className="flex-1 md:flex-none px-5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
-          >
-            <Download size={18} /> Export
-          </button>
-          <button 
-            onClick={handleNewPatient} 
-            className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-          >
-            <PlusCircle size={18} /> New Patient
-          </button>
+          <Link to="/patients" className="mt-4 sm:mt-0 inline-flex items-center px-4 py-2 border border-transparent rounded-xl shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition-colors">
+            <Users className="w-4 h-4 mr-2" />
+            {t('patients')}
+          </Link>
         </div>
       </div>
 
-      <div className="flex-grow bg-white rounded-[2rem] shadow-2xl shadow-slate-200/60 border border-slate-100 flex flex-col overflow-hidden relative">
-        {/* Messages Area */}
-        <div className="flex-grow overflow-y-auto p-6 md:p-10 space-y-8 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
-          {messages.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center px-8 max-w-lg mx-auto">
-              <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-primary/10 p-8 rounded-[2.5rem] mb-8"
-              >
-                <Bot className="text-primary w-16 h-16" />
-              </motion.div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-4 tracking-tight">Start New Analysis</h3>
-              <p className="text-slate-500 leading-relaxed mb-8">
-                Describe the clinical case, medical history, or questions about drug interactions. Novik will analyze the information in seconds.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                {[
-                  "Hypertensive patient with...",
-                  "Amoxicillin interaction with...",
-                  "Extraction protocol in...",
-                  "Surgical risk in patient..."
-                ].map((suggestion, i) => (
-                  <button 
-                    key={i}
-                    onClick={() => setInput(suggestion)}
-                    className="p-3 text-sm text-slate-600 border border-slate-100 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all text-left"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+      {loading ? (
+        <div className="h-64 flex items-center justify-center text-slate-500">{t('loading')}</div>
+      ) : !dashboardData ? (
+        <div className="h-64 flex items-center justify-center text-slate-500 bg-white rounded-3xl border border-slate-100 shadow-sm px-6 text-center">
+          {t('not_enough_data_dashboard')}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* 1. CLINICAL IMPACT */}
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+              <Target className="w-48 h-48 text-teal-600" />
             </div>
-          )}
-
-          <AnimatePresence mode="popLayout">
-            {messages.map((msg, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg ${
-                    msg.role === 'user' ? 'bg-slate-800 text-white' : 'bg-primary text-white'
-                  }`}>
-                    {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
-                  </div>
-                  <div className={`p-5 rounded-3xl shadow-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-slate-800 text-white rounded-tr-none' 
-                      : 'bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none'
-                  }`}>
-                    <div className="prose prose-slate max-w-none prose-p:leading-relaxed prose-headings:text-slate-900 prose-headings:font-bold">
-                      {msg.content.split('\n').map((line, idx) => (
-                        <p key={idx} className="mb-2 last:mb-0">{line}</p>
-                      ))}
+            
+            <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-2">
+              <Activity className="w-6 h-6 text-teal-600" />
+              {t('global_clinical_impact')}
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              {/* Mejora Media */}
+              <div className="md:col-span-1 border-r border-slate-100 pr-8">
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">{t('average_improvement')}</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-6xl font-black tracking-tighter ${dashboardData.impact.avgImprovement >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {dashboardData.impact.avgImprovement > 0 ? '+' : ''}{dashboardData.impact.avgImprovement}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-lg font-bold text-slate-400">{t('pts')}</span>
+                    <div className="flex items-center gap-1 ml-2 bg-slate-50 px-2 py-1 rounded-md">
+                      <span className="text-xs font-medium text-slate-500">{t('health_score')}</span>
+                      <InfoTooltip text={t('health_score_explanation')} iconClassName="w-4 h-4 text-slate-400" />
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          
-          {isLoading && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-start"
-            >
-              <div className="flex gap-4 max-w-[85%]">
-                <div className="w-10 h-10 rounded-2xl bg-primary text-white flex items-center justify-center flex-shrink-0 animate-pulse">
-                  <Bot size={20} />
+                <p className="text-sm font-medium text-slate-500 mt-2">{t('per_patient_in_treatment')}</p>
+              </div>
+
+              {/* Distribución de Evolución */}
+              <div className="md:col-span-2 flex flex-col justify-center px-4">
+                <div className="flex justify-between text-sm font-bold mb-3">
+                  <span className="text-emerald-600">{dashboardData.impact.improvedPercent}% {t('improve')}</span>
+                  <span className="text-slate-400">{dashboardData.impact.stablePercent}% {t('stable')}</span>
+                  <span className="text-red-500">{dashboardData.impact.worsenedPercent}% {t('worsen')}</span>
                 </div>
-                <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 rounded-tl-none flex items-center gap-3">
-                  <Loader2 className="animate-spin text-primary" size={20} />
-                  <span className="text-slate-500 text-sm font-medium">Novik is analyzing...</span>
+                <div className="w-full h-4 flex rounded-full overflow-hidden bg-slate-100">
+                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${dashboardData.impact.improvedPercent}%` }} />
+                  <div className="bg-slate-300 h-full transition-all" style={{ width: `${dashboardData.impact.stablePercent}%` }} />
+                  <div className="bg-red-500 h-full transition-all" style={{ width: `${dashboardData.impact.worsenedPercent}%` }} />
+                </div>
+                <p className="text-xs font-medium text-slate-400 mt-3 text-center">
+                  {t('based_on')} {dashboardData.impact.trackedCount} {t('patients_with_followup')}
+                </p>
+              </div>
+
+              {/* KPIs Secundarios */}
+              <div className="md:col-span-1 flex flex-col justify-center gap-4 pl-4 border-l border-slate-100">
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('stabilized_patients')}</p>
+                  <p className="text-2xl font-black text-teal-600">{dashboardData.impact.stabilizedPercent}%</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('relapse_rate')}</p>
+                  <p className={`text-2xl font-black ${dashboardData.impact.relapsePercent > 15 ? 'text-red-500' : 'text-slate-700'}`}>
+                    {dashboardData.impact.relapsePercent}%
+                  </p>
                 </div>
               </div>
-            </motion.div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-100">
-          <div className="max-w-4xl mx-auto relative">
-            <div className="relative flex items-end gap-3 bg-white p-2 rounded-[1.5rem] shadow-xl shadow-slate-200/50 border border-slate-200 focus-within:border-primary/50 transition-all">
-              <button className="p-3 text-slate-400 hover:text-primary transition-colors rounded-xl hover:bg-slate-50">
-                <Paperclip size={22} />
-              </button>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Type the clinical case details here..."
-                className="flex-grow bg-transparent border-none focus:ring-0 py-3 px-2 resize-none max-h-40 min-h-[50px] text-slate-700 placeholder:text-slate-400"
-                rows={1}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                className={`p-3 rounded-xl transition-all ${
-                  input.trim() && !isLoading 
-                    ? 'bg-primary text-white shadow-lg shadow-primary/30 hover:scale-105 active:scale-95' 
-                    : 'bg-slate-100 text-slate-300'
-                }`}
-              >
-                <Send size={22} />
-              </button>
             </div>
-            <p className="text-[10px] text-center text-slate-400 mt-3 uppercase tracking-widest font-bold">
-              Novik AI can make mistakes. Always verify clinical information.
-            </p>
+          </div>
+
+          {/* 2. COHORTES */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Baseline */}
+            <div className="bg-slate-50 rounded-3xl border border-slate-100 p-6">
+              <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-600 mb-4">
+                <UserPlus className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">{t('new_patients')}</h3>
+              <p className="text-sm font-medium text-slate-500 mb-6">{t('diagnostic_phase_baseline')}</p>
+              
+              <div className="bg-white rounded-2xl p-4 border border-slate-100">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{t('initial_score')}</p>
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-black text-slate-700">{dashboardData.cohorts.baseline.avgScore}</span>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-sm font-medium text-slate-400">{t('pts')}</span>
+                    <div className="flex items-center gap-1 ml-1">
+                      <span className="text-[10px] font-medium text-slate-400 uppercase">{t('health_score')}</span>
+                      <InfoTooltip text={t('health_score_explanation')} iconClassName="w-3.5 h-3.5 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">{t('arrival_context')} ({dashboardData.cohorts.baseline.count} {t('patients_lowercase')})</p>
+              </div>
+            </div>
+
+            {/* Tratamiento */}
+            <div className="bg-teal-50 rounded-3xl border border-teal-100 p-6">
+              <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-teal-600 mb-4">
+                <Stethoscope className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-teal-900 mb-1">{t('in_treatment')}</h3>
+              <p className="text-sm font-medium text-teal-600/80 mb-6">{t('active_improvement_phase')}</p>
+              
+              <div className="bg-white rounded-2xl p-4 border border-teal-100 shadow-sm">
+                <p className="text-xs font-bold text-teal-600/60 uppercase tracking-wider mb-1">{t('average_improvement')}</p>
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-black text-teal-600">
+                    {dashboardData.cohorts.treatment.avgImprovement > 0 ? '+' : ''}{dashboardData.cohorts.treatment.avgImprovement}
+                  </span>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-sm font-medium text-teal-600/60">{t('pts')}</span>
+                    <div className="flex items-center gap-1 ml-1">
+                      <span className="text-[10px] font-medium text-teal-600/60 uppercase">{t('health_score')}</span>
+                      <InfoTooltip text={t('health_score_explanation')} iconClassName="w-3.5 h-3.5 text-teal-600/60" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-teal-600/80 mt-2">{t('your_direct_impact')} ({dashboardData.cohorts.treatment.count} {t('patients_lowercase')})</p>
+              </div>
+            </div>
+
+            {/* Mantenimiento */}
+            <div className="bg-emerald-50 rounded-3xl border border-emerald-100 p-6">
+              <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-emerald-600 mb-4">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-emerald-900 mb-1">{t('in_maintenance')}</h3>
+              <p className="text-sm font-medium text-emerald-600/80 mb-6">{t('control_stability_phase')}</p>
+              
+              <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-sm">
+                <p className="text-xs font-bold text-emerald-600/60 uppercase tracking-wider mb-1">{t('average_stability')}</p>
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-black text-emerald-600">{dashboardData.cohorts.maintenance.avgScore}</span>
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-sm font-medium text-emerald-600/60">{t('pts')}</span>
+                    <div className="flex items-center gap-1 ml-1">
+                      <span className="text-[10px] font-medium text-emerald-600/60 uppercase">{t('health_score')}</span>
+                      <InfoTooltip text={t('health_score_explanation')} iconClassName="w-3.5 h-3.5 text-emerald-600/60" />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-emerald-600/80 mt-2">{t('control_capacity')} ({dashboardData.cohorts.maintenance.count} {t('patients_lowercase')})</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. ACTIVIDAD RECIENTE */}
+          <div className="bg-white shadow-sm rounded-3xl border border-slate-100 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-900">{t('recent_patient_evolution')}</h3>
+              <Link to="/patients" className="text-sm font-bold text-teal-600 hover:text-teal-700">{t('view_all')}</Link>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {dashboardData.recentPatients.length === 0 ? (
+                <div className="p-6 text-center text-slate-500">{t('no_patients_found')}</div>
+              ) : (
+                dashboardData.recentPatients.map((p) => (
+                  <div key={p.patient.id}>
+                    <Link to={`/patients/${p.patient.id}`} className="block hover:bg-slate-50 transition-colors">
+                      <div className="px-6 py-4 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
+                            {p.patient.clinicalRecord?.charAt(0) || '#'}
+                          </div>
+                          <div className="ml-4">
+                            <p className="text-sm font-bold text-slate-900">{p.patient.clinicalRecord}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                p.cohort === 'baseline' ? 'bg-slate-100 text-slate-600' :
+                                p.cohort === 'treatment' ? 'bg-teal-100 text-teal-700' :
+                                'bg-emerald-100 text-emerald-700'
+                              }`}>
+                                {p.cohort === 'baseline' ? t('new_caps') : p.cohort === 'treatment' ? t('in_treatment') : t('maintenance_caps')}
+                              </span>
+                              <span className="text-xs text-slate-400">{new Date(p.lastDate).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                          {p.hasMultiple ? (
+                            <div className="flex items-center gap-3">
+                              <div className="text-right hidden sm:block">
+                                <p className="text-xs font-medium text-slate-400">{t('initial_score')}</p>
+                                <p className="text-sm font-bold text-slate-500">{p.firstScore}</p>
+                              </div>
+                              <ArrowRight className="w-4 h-4 text-slate-300 hidden sm:block" />
+                              <div className="text-right">
+                                <p className="text-xs font-medium text-slate-400">{t('current')}</p>
+                                <p className="text-lg font-black text-slate-900">{p.latestScore}</p>
+                              </div>
+                              <div className={`flex items-center justify-center px-2.5 py-1 rounded-lg font-bold text-sm min-w-[3rem] ${
+                                p.improvement >= 5 ? 'bg-emerald-50 text-emerald-600' : 
+                                p.improvement <= -5 ? 'bg-red-50 text-red-600' : 
+                                'bg-slate-50 text-slate-500'
+                              }`}>
+                                {p.improvement > 0 ? '+' : ''}{p.improvement}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-right">
+                              <p className="text-xs font-medium text-slate-400">{t('initial_score')}</p>
+                              <p className="text-lg font-black text-slate-900">{p.firstScore}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
